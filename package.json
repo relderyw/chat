@@ -8,6 +8,7 @@
     "build": "node scripts/build.mjs",
     "preview": "vite preview",
     "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
+    "create-user": "node --env-file=.env.local scripts/create-user.mjs",
     "reset-password": "node --env-file=.env.local scripts/reset-password.mjs"
   },
   "dependencies": {
