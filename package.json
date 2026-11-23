@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "node scripts/build.mjs",
     "preview": "vite preview",
-    "create-admin": "node --env-file=.env.local scripts/create-admin.mjs"
+    "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
+    "reset-password": "node --env-file=.env.local scripts/reset-password.mjs"
   },
   "dependencies": {
     "firebase": "12.0.0",

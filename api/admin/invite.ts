@@ -25,7 +25,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const { auth, db } = adminServices();
-    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
     if (!projectId) throw new Error("FIREBASE_PROJECT_ID precisa estar configurada.");
     const email = usernameToAuthEmail(username, projectId);
     const usernameRef = db.collection("usernames").doc(username);

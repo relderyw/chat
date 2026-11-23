@@ -3,12 +3,25 @@ import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import type { ApiRequest, ApiResponse } from "./types";
 
+function cleanPrivateKey(key?: string): string | undefined {
+  if (!key) return undefined;
+  let cleaned = key.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned.replace(/\\n/g, "\n");
+}
+
 function firebaseAdminApp() {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const privateKey = cleanPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
   if (!projectId || !clientEmail || !privateKey) {
-    throw new Error("As credenciais administrativas do Firebase precisam estar configuradas.");
+    const missing: string[] = [];
+    if (!projectId) missing.push("FIREBASE_PROJECT_ID (ou VITE_FIREBASE_PROJECT_ID)");
+    if (!clientEmail) missing.push("FIREBASE_CLIENT_EMAIL");
+    if (!privateKey) missing.push("FIREBASE_PRIVATE_KEY");
+    throw new Error(`As credenciais administrativas do Firebase precisam estar configuradas. Faltando: ${missing.join(", ")}`);
   }
   return getApps()[0] ?? initializeApp({
     credential: cert({ projectId, clientEmail, privateKey }),
