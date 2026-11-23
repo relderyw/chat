@@ -26,7 +26,7 @@ if ((await usernameRef.get()).exists) {
   process.exit(1);
 }
 
-const email = `${username}@${projectId}.invalid`;
+const email = `${username}@${projectId}.example.com`;
 const temporaryPassword = randomBytes(18).toString("base64url");
 let user;
 try {

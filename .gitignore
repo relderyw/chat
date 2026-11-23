@@ -12,3 +12,4 @@ fire.txt
 # Never commit Firebase service-account credentials.
 chat.json
 *firebase*service-account*.json
+.env*
