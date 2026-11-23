@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  AlertCircle, Check, ImagePlus, LockKeyhole, LogOut, MessageCircle, Send,
-  ShieldCheck, UserPlus, Users, X,
+  AlertCircle, Check, ImagePlus, LockKeyhole, LogOut, MessageCircle, Pencil,
+  Send, ShieldCheck, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut, type User,
 } from "firebase/auth";
 import {
-  addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query,
-  serverTimestamp, Timestamp,
+  addDoc, collection, deleteDoc, doc, getDoc, limit, onSnapshot, orderBy,
+  query, serverTimestamp, Timestamp, updateDoc,
 } from "firebase/firestore";
 import { auth, configError, db } from "./firebase";
 import { normalizeUsername, USERNAME_PATTERN, usernameToAuthEmail } from "../shared/identity";
@@ -29,6 +29,7 @@ type ChatMessage = {
   body: string;
   image_id: string | null;
   created_at: Date;
+  edited_at?: Date | null;
 };
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -107,6 +108,8 @@ function App() {
   const [temporaryCredentials, setTemporaryCredentials] = useState<{ username: string; password: string } | null>(null);
   const [adminUsers, setAdminUsers] = useState<Profile[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -151,6 +154,7 @@ function App() {
             body: data.body as string,
             image_id: (data.image_id as string | null) ?? null,
             created_at: (data.created_at as Timestamp | undefined)?.toDate() ?? new Date(),
+            edited_at: (data.edited_at as Timestamp | undefined)?.toDate() ?? null,
           };
         }).reverse());
       },
@@ -407,6 +411,43 @@ function App() {
     }
   }
 
+  async function handleEditMessage(message: ChatMessage) {
+    setEditingMessageId(message.id);
+    setEditingBody(message.body);
+  }
+
+  async function handleSaveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editingMessageId || !editingBody.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await updateDoc(doc(db, "messages", editingMessageId), {
+        body: editingBody.trim(),
+        edited_at: serverTimestamp(),
+      });
+      setEditingMessageId(null);
+      setEditingBody("");
+    } catch (editError) {
+      setError(editError instanceof Error ? editError.message : "Não foi possível editar a mensagem.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteMessage(messageId: string) {
+    if (!window.confirm("Excluir esta mensagem? Essa ação não pode ser desfeita.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await deleteDoc(doc(db, "messages", messageId));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Não foi possível excluir a mensagem.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (configError) {
     return (
       <main className="setup-screen">
@@ -533,16 +574,47 @@ function App() {
             const day = message.created_at.toDateString();
             const showDate = day !== previousDay;
             previousDay = day;
+            const canEdit = message.sender_id === profile.id && !message.image_id;
+            const canDelete = message.sender_id === profile.id || profile.role === "admin";
+            const isEditing = editingMessageId === message.id;
             return (
               <div key={message.id}>
                 {showDate && <div className="date-divider"><span>{formatDay(message.created_at)}</span></div>}
                 <article className="message-row">
                   <div className="avatar message-avatar">{initials(message.sender_name)}</div>
                   <div className="message-content">
-                    <div className="message-meta"><strong>{message.sender_name}</strong><time>{displayTime(message.created_at)}</time></div>
-                    {message.body && <p className="message-text">{message.body}</p>}
-                    {message.image_id && <ImageMessage imageId={message.image_id} user={user} isAdmin={profile.role === "admin"} onDownload={handleDownload} />}
+                    <div className="message-meta"><strong>{message.sender_name}</strong><time>{displayTime(message.created_at)}</time>{message.edited_at && <span className="edited-label">(editado)</span>}</div>
+                    {isEditing ? (
+                      <form className="edit-form" onSubmit={handleSaveEdit}>
+                        <input
+                          className="edit-input"
+                          value={editingBody}
+                          onChange={(e) => setEditingBody(e.target.value)}
+                          maxLength={4000}
+                          autoFocus
+                        />
+                        <div className="edit-actions">
+                          <button className="edit-save-btn" type="submit" disabled={busy || !editingBody.trim()}>
+                            <Check size={14} /> Salvar
+                          </button>
+                          <button className="edit-cancel-btn" type="button" onClick={() => { setEditingMessageId(null); setEditingBody(""); }}>
+                            <X size={14} /> Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        {message.body && <p className="message-text">{message.body}</p>}
+                        {message.image_id && <ImageMessage imageId={message.image_id} user={user} isAdmin={profile.role === "admin"} onDownload={handleDownload} />}
+                      </>
+                    )}
                   </div>
+                  {!isEditing && (canEdit || canDelete) && (
+                    <div className="message-actions">
+                      {canEdit && <button className="msg-action-btn" title="Editar" onClick={() => handleEditMessage(message)}><Pencil size={13} /></button>}
+                      {canDelete && <button className="msg-action-btn msg-delete-btn" title="Excluir" onClick={() => handleDeleteMessage(message.id)}><Trash2 size={13} /></button>}
+                    </div>
+                  )}
                 </article>
               </div>
             );

@@ -66,8 +66,22 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .date-divider { display: flex; align-items: center; gap: 12px; margin: 9px 0 19px; color: #9aa1ad; font-size: 10px; }
 .date-divider::before, .date-divider::after { height: 1px; flex: 1; background: #eceef2; content: ""; }
 .date-divider span { padding: 5px 10px; border: 1px solid #eff0f3; border-radius: 20px; background: #fff; }
-.message-row { display: flex; gap: 11px; padding: 8px 5px 11px; border-radius: 9px; }
+.message-row { display: flex; gap: 11px; padding: 8px 5px 11px; border-radius: 9px; position: relative; }
 .message-row:hover { background: #fafbfc; }
+.message-row:hover .message-actions { opacity: 1; pointer-events: auto; }
+.message-actions { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; opacity: 0; pointer-events: none; transition: opacity .15s; }
+.msg-action-btn { display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid #e3e6ec; border-radius: 7px; background: #fff; color: #7a84a0; box-shadow: 0 1px 4px #0001; }
+.msg-action-btn:hover { color: #4357c5; border-color: #c5ccf5; background: #eef1ff; }
+.msg-delete-btn:hover { color: #d9544f; border-color: #f5c5c4; background: #fff0f0; }
+.edited-label { font-size: 10px; color: #a2a8b2; font-style: italic; }
+.edit-form { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.edit-input { width: 100%; padding: 7px 10px; border: 1px solid #c5cae0; border-radius: 8px; font-size: 12px; color: #515967; outline: none; }
+.edit-input:focus { border-color: #7867ff; box-shadow: 0 0 0 3px #7867ff18; }
+.edit-actions { display: flex; gap: 7px; }
+.edit-save-btn { display: inline-flex; align-items: center; gap: 5px; height: 29px; padding: 0 11px; border: 0; border-radius: 7px; background: #7867ff; color: #fff; font-size: 11px; font-weight: 600; }
+.edit-save-btn:hover:not(:disabled) { background: #5c4de0; }
+.edit-cancel-btn { display: inline-flex; align-items: center; gap: 5px; height: 29px; padding: 0 11px; border: 1px solid #dde0ea; border-radius: 7px; background: #fff; color: #6b7280; font-size: 11px; }
+.edit-cancel-btn:hover { background: #f5f6fa; }
 .message-avatar { width: 32px; height: 32px; flex-basis: 32px; border-radius: 10px; }
 .message-content { min-width: 0; flex: 1; }
 .message-meta { display: flex; align-items: baseline; gap: 9px; }
@@ -253,10 +267,17 @@ button:focus-visible, input:focus-visible {
   border-color: #272e3a;
   background: #121721;
 }
-.message-row:hover { background: #ffffff05; }
-.message-meta strong, .empty-state strong { color: #e4e9f2; }
+.message-row:hover { background: #ffffff05; }.message-meta strong, .empty-state strong { color: #e4e9f2; }
 .message-meta time, .empty-state { color: #8792a4; }
 .message-text { color: #c0c8d6; }
+.edited-label { color: #666f80; }
+.msg-action-btn { border-color: #2a3140; background: #161c28; color: #7a84a0; box-shadow: none; }
+.msg-action-btn:hover { color: #c2b7ff; border-color: #5349a4; background: #1f1a38; }
+.msg-delete-btn:hover { color: #ff9a9e; border-color: #6b2f33; background: #2a1519; }
+.edit-input { color: #edf0f8; border-color: #30394a; background: #0d121a; }
+.edit-input:focus { border-color: #8979ff; box-shadow: 0 0 0 3px #7867ff20; }
+.edit-cancel-btn { border-color: #2a3140; background: #1a2030; color: #9ba6b7; }
+.edit-cancel-btn:hover { background: #222a3a; }
 .composer-wrap { background: linear-gradient(0deg, #0e1118 75%, #0e111800); }
 .composer {
   border-color: #293140;

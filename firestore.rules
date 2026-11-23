@@ -52,8 +52,14 @@ service cloud.firestore {
             request.resource.data.image_id.matches('^[A-Za-z0-9_-]{20,128}$')
           )
         );
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow update: if isMember() &&
+        (resource.data.sender_id == request.auth.uid || isAdmin()) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'edited_at']) &&
+        request.resource.data.body is string &&
+        request.resource.data.body.size() <= 4000 &&
+        (request.resource.data.body.size() > 0 || resource.data.image_id != null);
+      allow delete: if isMember() &&
+        (resource.data.sender_id == request.auth.uid || isAdmin());
     }
 
     match /images/{imageId} {
