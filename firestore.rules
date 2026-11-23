@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('active', true) == true &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('must_change_password', false) == false;
+    }
+
+    function isAdmin() {
+      return isMember() &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /profiles/{userId} {
+      allow get: if signedIn() && (request.auth.uid == userId || isMember());
+      allow list: if isMember();
+      allow create, delete: if false;
+      allow update: if isMember() &&
+        request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['display_name']) &&
+        request.resource.data.display_name is string &&
+        request.resource.data.display_name.size() <= 80;
+    }
+
+    match /messages/{messageId} {
+      allow get, list: if isMember();
+      allow create: if isMember() &&
+        request.resource.data.keys().hasOnly([
+          'sender_id', 'sender_name', 'body', 'image_id', 'created_at'
+        ]) &&
+        request.resource.data.sender_id == request.auth.uid &&
+        request.resource.data.sender_name is string &&
+        request.resource.data.sender_name ==
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.display_name &&
+        request.resource.data.sender_name.size() <= 160 &&
+        request.resource.data.body is string &&
+        request.resource.data.body.size() <= 4000 &&
+        (
+          request.resource.data.body.size() > 0 ||
+          request.resource.data.image_id is string
+        ) &&
+        (
+          request.resource.data.image_id == null ||
+          (
+            request.resource.data.image_id is string &&
+            request.resource.data.image_id.matches('^[A-Za-z0-9_-]{20,128}$')
+          )
+        );
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /images/{imageId} {
+      allow read, write: if false;
+    }
+
+    match /usernames/{username} {
+      allow read, write: if false;
+    }
+  }
+}

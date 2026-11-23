@@ -1,0 +1,14 @@
+node_modules
+dist
+*.tsbuildinfo
+.vercel
+.env
+.env.*
+!.env.example
+chat.json
+*service-account*.json
+fire.txt
+
+# Never commit Firebase service-account credentials.
+chat.json
+*firebase*service-account*.json
