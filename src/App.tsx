@@ -551,7 +551,7 @@ function App() {
         <header className="chat-header">
           <button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu"><Users size={19} /></button>
           <span className="header-hash">#</span>
-          <div className="channel-heading"><h1>geral</h1><p>O espaço de conversa da sua equipe</p></div>
+          <div className="channel-heading"><h1>geral</h1></div>
           <div className="header-actions">
             <div className="header-member-count"><Users size={16} /><span>{members.length}</span></div>
             {profile.role === "admin" && <button className="invite-button" onClick={() => {
@@ -567,7 +567,7 @@ function App() {
         <div className="message-list" ref={listRef}>
           <div className="welcome-block">
             <div className="welcome-icon"><MessageCircle size={26} /></div>
-            <h2>Bem-vindo ao canal geral</h2>
+            <h2>Bem-vindo (a) :)</h2>
             <p>Esse é o começo da conversa do seu time. Compartilhe atualizações, ideias e imagens do projeto.</p>
           </div>
           {messages.map((message) => {
