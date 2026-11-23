@@ -21,8 +21,12 @@ const app = getApps()[0] ?? initializeApp({
 });
 const auth = getAuth(app);
 const db = getFirestore(app);
-const oldSuffix = `@${projectId}.invalid`;
-const newSuffix = `@${projectId}.example.com`;
+const suffixes = [
+  `@${projectId}.invalid`,
+  `@${projectId}.example.com`,
+  `@${projectId}.firebaseapp.com`,
+];
+const newSuffix = `@${projectId}.firebaseapp.com`;
 
 const users = [];
 let pageToken;
@@ -42,9 +46,8 @@ const problems = [];
 
 for (const user of users) {
   const currentEmail = user.email?.toLowerCase();
-  if (!currentEmail?.endsWith(oldSuffix) && !currentEmail?.endsWith(newSuffix)) continue;
-
-  const suffix = currentEmail.endsWith(oldSuffix) ? oldSuffix : newSuffix;
+  const suffix = suffixes.find((candidate) => currentEmail?.endsWith(candidate));
+  if (!currentEmail || !suffix) continue;
   const username = currentEmail.slice(0, -suffix.length);
   if (!usernamePattern.test(username)) {
     problems.push(`A conta ${user.uid} tem um nome técnico incompatível.`);

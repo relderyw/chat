@@ -5,5 +5,5 @@ export function normalizeUsername(value: string): string {
 }
 
 export function usernameToAuthEmail(username: string, projectId: string): string {
-  return `${normalizeUsername(username)}@${projectId}.example.com`;
+  return `${normalizeUsername(username)}@${projectId}.firebaseapp.com`;
 }

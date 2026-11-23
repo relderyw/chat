@@ -25,7 +25,7 @@ if ((await usernameRef.get()).exists) {
   process.exit(1);
 }
 
-const email = `${username}@${projectId}.example.com`;
+const email = `${username}@${projectId}.firebaseapp.com`;
 const temporaryPassword = randomBytes(18).toString("base64url");
 let user;
 try {
