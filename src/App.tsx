@@ -567,7 +567,7 @@ function App() {
         <div className="message-list" ref={listRef}>
           <div className="welcome-block">
             <div className="welcome-icon"><MessageCircle size={26} /></div>
-            <h2>Bem-vindo (a) :)</h2>
+            <h2>Bem-vindo (a)</h2>
             <p>Esse é o começo da conversa do seu time. Compartilhe atualizações, ideias e imagens do projeto.</p>
           </div>
           {messages.map((message) => {
