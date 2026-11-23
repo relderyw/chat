@@ -11,7 +11,6 @@ for (const args of [
     "--target", "ES2022",
     "--module", "ESNext",
     "--moduleResolution", "Bundler",
-    "--allowImportingTsExtensions",
     "--esModuleInterop",
     "--skipLibCheck",
     "--strict",

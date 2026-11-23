@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from "../../server/types.ts";
-import { authenticatedUser, methodNotAllowed, adminServices } from "../../server/firebase.ts";
-import { normalizeUsername, USERNAME_PATTERN, usernameToAuthEmail } from "../../shared/identity.ts";
+import type { ApiRequest, ApiResponse } from "../../server/types";
+import { authenticatedUser, methodNotAllowed, adminServices } from "../../server/firebase";
+import { normalizeUsername, USERNAME_PATTERN, usernameToAuthEmail } from "../../shared/identity";
 import { randomBytes } from "node:crypto";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -88,7 +88,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "auth/email-already-exists") {
       return res.status(409).json({ error: "Esse nome de usuário já está em uso." });
     }
+    const message = error instanceof Error ? error.message : "Não foi possível criar a conta.";
     console.error("Falha ao convidar membro:", error);
-    return res.status(500).json({ error: "Não foi possível criar a conta." });
+    return res.status(500).json({ error: `Erro no servidor: ${message}` });
   }
 }

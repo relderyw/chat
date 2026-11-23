@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import type { ApiRequest, ApiResponse } from "./types.ts";
+import type { ApiRequest, ApiResponse } from "./types";
 
 function cleanPrivateKey(key?: string): string | undefined {
   if (!key) return undefined;

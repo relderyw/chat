@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { ApiRequest, ApiResponse } from "../../server/types.ts";
-import { adminServices, authenticatedUser } from "../../server/firebase.ts";
+import type { ApiRequest, ApiResponse } from "../../server/types";
+import { adminServices, authenticatedUser } from "../../server/firebase";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "GET" && req.method !== "DELETE" && req.method !== "POST") {
@@ -91,7 +91,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     });
     return res.status(200).json({ message: "A conta foi desativada e o acesso ao chat foi removido." });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Não foi possível concluir a operação com a conta.";
     console.error("Falha ao gerenciar contas da equipe:", error);
-    return res.status(500).json({ error: "Não foi possível concluir a operação com a conta." });
+    return res.status(500).json({ error: `Erro no servidor: ${message}` });
   }
 }

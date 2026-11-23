@@ -1,5 +1,5 @@
-import type { ApiRequest, ApiResponse } from "../server/types.ts";
-import { authenticatedUser, methodNotAllowed, adminServices } from "../server/firebase.ts";
+import type { ApiRequest, ApiResponse } from "../server/types";
+import { authenticatedUser, methodNotAllowed, adminServices } from "../server/firebase";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method === "POST") {

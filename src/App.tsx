@@ -36,6 +36,15 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_COMPRESSED_IMAGE_SIZE = 480 * 1024;
 
+async function parseJsonResponse(response: Response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(text && text.length < 300 ? text : `Erro no servidor (HTTP ${response.status}).`);
+  }
+}
+
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
 }
@@ -311,7 +320,7 @@ function App() {
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" },
         body: JSON.stringify({ username: inviteUsername, displayName: inviteName }),
       });
-      const result = await response.json();
+      const result = await parseJsonResponse(response);
       if (!response.ok) throw new Error(result.error || "Não foi possível convidar esse membro.");
       setNotice(result.message);
       setTemporaryCredentials({ username: result.username, password: result.temporaryPassword });
@@ -328,12 +337,16 @@ function App() {
 
   async function loadAdminUsers() {
     if (!user) return;
-    const response = await fetch("/api/admin/users", {
-      headers: { Authorization: `Bearer ${await user.getIdToken()}` },
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Não foi possível carregar as contas.");
-    setAdminUsers(result.users as Profile[]);
+    try {
+      const response = await fetch("/api/admin/users", {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      const result = await parseJsonResponse(response);
+      if (!response.ok) throw new Error(result.error || "Não foi possível carregar as contas.");
+      setAdminUsers(result.users as Profile[]);
+    } catch (usersError) {
+      setError(usersError instanceof Error ? usersError.message : "Não foi possível carregar as contas.");
+    }
   }
 
   async function handleDeactivate(userId: string) {
@@ -568,7 +581,7 @@ function App() {
           <div className="welcome-block">
             <div className="welcome-icon"><MessageCircle size={26} /></div>
             <h2>Bem-vindo (a)</h2>
-            <p>Esse é o começo da conversa do seu time. Compartilhe atualizações, ideias e imagens do projeto.</p>
+            <p>Alinhamento das expectativas ;)</p>
           </div>
           {messages.map((message) => {
             const day = message.created_at.toDateString();
@@ -646,7 +659,7 @@ function App() {
 
             <form onSubmit={handleInvite} className="invite-form admin-create-form">
               <label htmlFor="invite-username">Nome de usuário</label>
-              <input id="invite-username" autoComplete="off" minLength={3} maxLength={30} pattern="[A-Za-z0-9._-]+" placeholder="ex.: reldery_assuncao" value={inviteUsername} onChange={(event) => setInviteUsername(event.target.value)} required />
+              <input id="invite-username" autoComplete="off" minLength={3} maxLength={30} pattern="[A-Za-z0-9._\-]+" placeholder="ex.: reldery_assuncao" value={inviteUsername} onChange={(event) => setInviteUsername(event.target.value)} required />
               <small className="field-hint">3–30 caracteres: letras, números, ponto, hífen ou sublinhado.</small>
               <label htmlFor="invite-name">Nome para exibição <span>(opcional)</span></label>
               <input id="invite-name" autoComplete="name" maxLength={80} placeholder="Como aparecerá nas mensagens" value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
