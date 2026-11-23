@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { ApiRequest, ApiResponse } from "../../server/types";
-import { adminServices, authenticatedUser } from "../../server/firebase";
+import type { ApiRequest, ApiResponse } from "../../server/types.js";
+import { adminServices, authenticatedUser } from "../../server/firebase.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "GET" && req.method !== "DELETE" && req.method !== "POST") {

@@ -1,5 +1,5 @@
-import type { ApiRequest, ApiResponse } from "../server/types";
-import { authenticatedUser, methodNotAllowed, adminServices } from "../server/firebase";
+import type { ApiRequest, ApiResponse } from "../server/types.js";
+import { authenticatedUser, methodNotAllowed, adminServices } from "../server/firebase.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method === "POST") {
