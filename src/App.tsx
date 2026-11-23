@@ -35,6 +35,23 @@ type ChatMessage = {
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_COMPRESSED_IMAGE_SIZE = 480 * 1024;
+const PROFILE_LOAD_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (reason: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(reason);
+      },
+    );
+  });
+}
 
 async function parseJsonResponse(response: Response) {
   const text = await response.text();
@@ -125,6 +142,8 @@ function App() {
   const [members, setMembers] = useState<Profile[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState("");
+  const [profileRetryCount, setProfileRetryCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -143,32 +162,50 @@ function App() {
   const fileRef = useRef<HTMLInputElement>(null);
   const initialMessagesLoadedRef = useRef(false);
 
-  useEffect(() => onAuthStateChanged(auth, async (currentUser) => {
-    setUser(currentUser);
-    if (!currentUser) {
-      setProfile(null);
-      setMembers([]);
-      setMessages([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const profileSnapshot = await getDoc(doc(db, "profiles", currentUser.uid));
-      if (!profileSnapshot.exists() || profileSnapshot.data().active === false) {
-        await signOut(auth);
-        setError("Esta conta ainda não foi convidada para o chat.");
+  useEffect(() => {
+    let active = true;
+    let loadId = 0;
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!active) return;
+      const currentLoadId = ++loadId;
+      setUser(currentUser);
+      setProfileLoadError("");
+      if (!currentUser) {
+        setProfile(null);
+        setMembers([]);
+        setMessages([]);
+        setLoading(false);
         return;
       }
-      setProfile({ id: currentUser.uid, ...profileSnapshot.data() } as Profile);
-      setError("");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil.");
-    } finally {
-      setLoading(false);
-    }
-  }), []);
+
+      setProfile(null);
+      setLoading(true);
+      void withTimeout(
+        getDoc(doc(db, "profiles", currentUser.uid)),
+        PROFILE_LOAD_TIMEOUT_MS,
+        "A leitura do perfil demorou demais. Verifique sua conexão e tente novamente.",
+      ).then(async (profileSnapshot) => {
+        if (!active || currentLoadId !== loadId) return;
+        if (!profileSnapshot.exists() || profileSnapshot.data().active === false) {
+          await signOut(auth);
+          setError("Esta conta ainda não foi convidada para o chat.");
+          return;
+        }
+        setProfile({ id: currentUser.uid, ...profileSnapshot.data() } as Profile);
+        setError("");
+      }).catch((loadError: unknown) => {
+        if (!active || currentLoadId !== loadId) return;
+        setProfileLoadError(loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil.");
+      }).finally(() => {
+        if (active && currentLoadId === loadId) setLoading(false);
+      });
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [profileRetryCount]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -553,7 +590,31 @@ function App() {
   }
 
   if (loading || !profile) {
-    return <main className="loading-screen"><div className="spinner" /><p>Carregando o espaço da equipe...</p></main>;
+    if (loading) {
+      return <main className="loading-screen"><div className="spinner" /><p>Carregando o espaço da equipe...</p></main>;
+    }
+
+    return (
+      <main className="auth-screen">
+        <section className="auth-card">
+          <div className="brand-mark"><AlertCircle size={24} /></div>
+          <p className="eyebrow">NÃO FOI POSSÍVEL CARREGAR</p>
+          <h1>Não foi possível carregar seu perfil.</h1>
+          <p className="auth-description">{profileLoadError || "Tente carregar seu perfil novamente ou encerre a sessão."}</p>
+          <button
+            className="primary-button auth-submit"
+            onClick={() => {
+              setProfileLoadError("");
+              setLoading(true);
+              setProfileRetryCount((count) => count + 1);
+            }}
+          >
+            Tentar novamente
+          </button>
+          <button className="password-logout" onClick={handleSignOut}>Sair</button>
+        </section>
+      </main>
+    );
   }
 
   if (profile.must_change_password) {
