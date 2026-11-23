@@ -45,6 +45,25 @@ async function parseJsonResponse(response: Response) {
   }
 }
 
+function playNotificationSound() {
+  try {
+    const audioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!audioContextClass) return;
+    const ctx = new audioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.09);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
 }
@@ -119,8 +138,10 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [hasUnread, setHasUnread] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const initialMessagesLoadedRef = useRef(false);
 
   useEffect(() => onAuthStateChanged(auth, async (currentUser) => {
     setUser(currentUser);
@@ -154,7 +175,7 @@ function App() {
     const unsubscribeMessages = onSnapshot(
       query(collection(db, "messages"), orderBy("created_at", "desc"), limit(300)),
       (snapshot) => {
-        setMessages(snapshot.docs.map((item) => {
+        const loaded = snapshot.docs.map((item) => {
           const data = item.data();
           return {
             id: item.id,
@@ -165,7 +186,23 @@ function App() {
             created_at: (data.created_at as Timestamp | undefined)?.toDate() ?? new Date(),
             edited_at: (data.edited_at as Timestamp | undefined)?.toDate() ?? null,
           };
-        }).reverse());
+        }).reverse();
+
+        if (initialMessagesLoadedRef.current) {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              const data = change.doc.data();
+              if (data.sender_id !== profile.id) {
+                setHasUnread(true);
+                playNotificationSound();
+              }
+            }
+          });
+        } else {
+          initialMessagesLoadedRef.current = true;
+        }
+
+        setMessages(loaded);
       },
       (snapshotError) => setError(snapshotError.message),
     );
@@ -185,6 +222,22 @@ function App() {
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    function clearUnread() {
+      setHasUnread(false);
+    }
+    window.addEventListener("focus", clearUnread);
+    window.addEventListener("click", clearUnread);
+    return () => {
+      window.removeEventListener("focus", clearUnread);
+      window.removeEventListener("click", clearUnread);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.title = hasUnread ? "(+) LSL — Chat" : "LSL — Chat";
+  }, [hasUnread]);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
@@ -531,7 +584,10 @@ function App() {
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <div className="brand-mark small"><MessageCircle size={20} /></div>
-          <span>equipe<span className="brand-dot">.</span></span>
+          <span className="brand-title-wrap">
+            {hasUnread && <span className="notification-badge" title="Novas mensagens">+</span>}
+            LSL<span className="brand-dot">.</span>
+          </span>
           <button className="icon-button mobile-close" onClick={() => setSidebarOpen(false)} aria-label="Fechar menu"><X size={18} /></button>
         </div>
         <div className="workspace-label">ESPAÇO DE TRABALHO</div>
