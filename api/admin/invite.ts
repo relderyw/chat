@@ -1,6 +1,6 @@
-import type { ApiRequest, ApiResponse } from "../../server/types";
-import { authenticatedUser, methodNotAllowed, adminServices } from "../../server/firebase";
-import { normalizeUsername, USERNAME_PATTERN, usernameToAuthEmail } from "../../shared/identity";
+import type { ApiRequest, ApiResponse } from "../../server/types.ts";
+import { authenticatedUser, methodNotAllowed, adminServices } from "../../server/firebase.ts";
+import { normalizeUsername, USERNAME_PATTERN, usernameToAuthEmail } from "../../shared/identity.ts";
 import { randomBytes } from "node:crypto";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
