@@ -177,11 +177,212 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .inline-alert button { display: grid; width: 22px; height: 22px; margin-left: auto; place-items: center; color: inherit; border: 0; background: transparent; }
 .error-alert { color: #a84141; background: #fff1f0; }
 .success-alert { color: #287354; background: #eaf8f1; }
-.image-attachment { position: relative; display: table; max-width: min(460px, 100%); margin-top: 7px; overflow: hidden; border: 1px solid #e9ebf0; border-radius: 9px; background: #f5f6f8; }
-.image-attachment img { display: block; max-width: 100%; max-height: 360px; object-fit: contain; user-select: none; }
-.image-watermark { position: absolute; right: 9px; bottom: 8px; padding: 4px 6px; color: #fff; border-radius: 4px; background: #18202b73; font-size: 8px; letter-spacing: .5px; pointer-events: none; }
-.download-button { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 5px; padding: 6px 8px; color: #313a4b; border: 1px solid #ffffffb8; border-radius: 6px; background: #ffffffeb; font-size: 10px; font-weight: 600; }
-.download-button:hover { color: #425fdf; background: #fff; }
+.image-attachment {
+  position: relative;
+  display: table;
+  max-width: min(460px, 100%);
+  margin-top: 7px;
+  overflow: hidden;
+  border: 1px solid #e9ebf0;
+  border-radius: 9px;
+  background: #f5f6f8;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.image-attachment:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px #00000045;
+}
+.image-attachment img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  user-select: none;
+}
+.image-watermark {
+  position: absolute;
+  right: 9px;
+  bottom: 8px;
+  padding: 4px 6px;
+  color: #fff;
+  border-radius: 4px;
+  background: #18202b80;
+  font-size: 8px;
+  letter-spacing: .5px;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
+.image-expand-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #10141fe0;
+  border: 1px solid #ffffff18;
+  color: #e4e8f3;
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity .15s ease, transform .15s ease;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+.image-attachment:hover .image-expand-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+.download-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  color: #313a4b;
+  border: 1px solid #ffffffb8;
+  border-radius: 6px;
+  background: #ffffffeb;
+  font-size: 10px;
+  font-weight: 600;
+}
+.download-button:hover {
+  color: #425fdf;
+  background: #fff;
+}
+
+/* Lightbox Modal (Expand Image) */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #04060cf0;
+  backdrop-filter: blur(14px);
+  animation: lightboxFadeIn .15s ease-out;
+  user-select: none;
+}
+@keyframes lightboxFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #0d121cd9;
+  border-bottom: 1px solid #ffffff12;
+  flex-shrink: 0;
+  z-index: 2;
+}
+.lightbox-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e4e9f5;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lightbox-title svg {
+  color: #9382ff;
+}
+.lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lightbox-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid #ffffff1a;
+  background: #1b2130;
+  color: #e2e8f5;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.lightbox-action-btn:hover {
+  background: #252e42;
+  color: #ffffff;
+  border-color: #9382ff55;
+}
+.lightbox-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #ffffff15;
+  background: #161c28;
+  color: #c5ccdc;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.lightbox-close-btn:hover {
+  background: #2b181d;
+  color: #ff9a9e;
+  border-color: #ff757544;
+}
+.lightbox-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
+  cursor: zoom-out;
+}
+.lightbox-img-wrapper {
+  position: relative;
+  max-width: 95vw;
+  max-height: 86vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  animation: lightboxZoomIn .18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes lightboxZoomIn {
+  from { transform: scale(0.94); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.lightbox-img {
+  max-width: 95vw;
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px #000000a0;
+}
+.lightbox-watermark {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 5px 9px;
+  color: #ffffff;
+  border-radius: 5px;
+  background: #0c1018c0;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  border: 1px solid #ffffff18;
+}
 .image-placeholder, .image-error { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 18px; color: #8a929f; border: 1px solid #eceef2; border-radius: 9px; font-size: 11px; }
 .image-error { color: #a84141; }
 .small-spinner { width: 17px !important; height: 17px !important; border-width: 2px !important; }
@@ -388,6 +589,14 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .composer { min-height: 42px; padding: 4px 6px 4px 10px; border-radius: 20px; }
   .composer-input { font-size: 15px; }
   .composer-hint { display: none; }
+
+  /* Lightbox no celular */
+  .lightbox-header { padding: 9px 12px; }
+  .lightbox-title { font-size: 12px; }
+  .lightbox-content { padding: 8px; }
+  .lightbox-img { max-width: 98vw; max-height: 84vh; border-radius: 4px; }
+  .lightbox-watermark { right: 8px; bottom: 8px; font-size: 8.5px; padding: 3px 6px; }
+  .image-expand-hint { opacity: 0.9; transform: translateY(0); font-size: 9px; padding: 2px 5px; }
 }
 @media (max-width: 420px) {
   .auth-card, .setup-card { padding: 26px 21px; }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  AlertCircle, Bell, BellRing, Check, ImagePlus, LockKeyhole, LogOut, MessageCircle, Pencil,
-  Reply, Send, ShieldCheck, Trash2, UserPlus, Users, X,
+  AlertCircle, Bell, BellRing, Check, Download, ImagePlus, LockKeyhole, LogOut,
+  Maximize2, MessageCircle, Pencil, Reply, Send, ShieldCheck, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut, type User,
@@ -266,6 +266,7 @@ function App() {
   const [editingBody, setEditingBody] = useState("");
   const [hasUnread, setHasUnread] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: string; sender_name: string; sender_id: string; body: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; id: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
     return typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default";
   });
@@ -274,6 +275,18 @@ function App() {
   const fileRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
   const initialMessagesLoadedRef = useRef(false);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setPreviewImage(null);
+      }
+    }
+    if (previewImage) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [previewImage]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -1083,6 +1096,7 @@ function App() {
                             user={user}
                             isAdmin={profile.role === "admin"}
                             onDownload={handleDownload}
+                            onExpand={(url, id) => setPreviewImage({ url, id })}
                           />
                         )}
                       </>
@@ -1223,15 +1237,75 @@ function App() {
           </section>
         </div>
       )}
+
+      {previewImage && (
+        <div
+          className="lightbox-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setPreviewImage(null);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Visualização ampliada da imagem"
+        >
+          <header className="lightbox-header">
+            <span className="lightbox-title">
+              <Maximize2 size={15} />
+              Visualização da imagem
+            </span>
+            <div className="lightbox-actions">
+              {profile.role === "admin" && (
+                <button
+                  type="button"
+                  className="lightbox-action-btn"
+                  onClick={() => handleDownload(previewImage.id)}
+                  title="Baixar imagem original"
+                >
+                  <Download size={14} />
+                  <span>Baixar</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="lightbox-close-btn"
+                onClick={() => setPreviewImage(null)}
+                title="Fechar (Esc)"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </header>
+
+          <div
+            className="lightbox-content"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setPreviewImage(null);
+            }}
+          >
+            <div className="lightbox-img-wrapper">
+              <img
+                src={previewImage.url}
+                alt="Imagem ampliada"
+                className="lightbox-img"
+                draggable={false}
+                onContextMenu={(event) => event.preventDefault()}
+              />
+              <div className="lightbox-watermark" aria-hidden="true">USO INTERNO · CONFIDENCIAL</div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-function ImageMessage({ imageId, user, isAdmin, onDownload }: {
+function ImageMessage({ imageId, user, isAdmin, onDownload, onExpand }: {
   imageId: string;
   user: User;
   isAdmin: boolean;
   onDownload: (path: string) => void;
+  onExpand?: (url: string, id: string) => void;
 }) {
   const [imageUrl, setImageUrl] = useState("");
   const [error, setError] = useState("");
@@ -1261,10 +1335,38 @@ function ImageMessage({ imageId, user, isAdmin, onDownload }: {
   if (!imageUrl) return <div className="image-placeholder"><div className="spinner small-spinner" />Carregando imagem...</div>;
 
   return (
-    <div className="image-attachment">
+    <div
+      className="image-attachment"
+      onClick={() => onExpand?.(imageUrl, imageId)}
+      title="Clique para ampliar"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onExpand?.(imageUrl, imageId);
+        }
+      }}
+    >
       <img src={imageUrl} alt="Imagem compartilhada no chat" draggable={false} onContextMenu={(event) => event.preventDefault()} />
       <div className="image-watermark" aria-hidden="true">USO INTERNO · CONFIDENCIAL</div>
-      {isAdmin && <button className="download-button" onClick={() => onDownload(imageId)}><ImagePlus size={14} /> Baixar imagem</button>}
+      <div className="image-expand-hint" aria-hidden="true">
+        <Maximize2 size={12} />
+        <span>Ampliar</span>
+      </div>
+      {isAdmin && (
+        <button
+          type="button"
+          className="download-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDownload(imageId);
+          }}
+          title="Baixar imagem"
+        >
+          <Download size={13} /> Baixar imagem
+        </button>
+      )}
     </div>
   );
 }
