@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  AlertCircle, Check, ImagePlus, LockKeyhole, LogOut, MessageCircle, Pencil,
-  Send, ShieldCheck, Trash2, UserPlus, Users, X,
+  AlertCircle, Bell, BellRing, Check, ImagePlus, LockKeyhole, LogOut, MessageCircle, Pencil,
+  Reply, Send, ShieldCheck, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut, type User,
@@ -31,6 +31,75 @@ type ChatMessage = {
   created_at: Date;
   edited_at?: Date | null;
 };
+
+interface MessageReply {
+  id?: string;
+  name: string;
+  snippet: string;
+}
+
+interface UserColor {
+  name: string;
+  text: string;
+  bg: string;
+  border: string;
+  avatarBg: string;
+  avatarText: string;
+}
+
+const USER_COLORS: UserColor[] = [
+  { name: "emerald", text: "#34d399", bg: "#064e3b33", border: "#10b98155", avatarBg: "#065f46", avatarText: "#a7f3d0" },
+  { name: "blue", text: "#60a5fa", bg: "#1e3a8a33", border: "#3b82f655", avatarBg: "#1e40af", avatarText: "#bfdbfe" },
+  { name: "amber", text: "#fbbf24", bg: "#78350f33", border: "#f59e0b55", avatarBg: "#92400e", avatarText: "#fde68a" },
+  { name: "purple", text: "#c084fc", bg: "#581c8733", border: "#a855f755", avatarBg: "#6b21a8", avatarText: "#e9d5ff" },
+  { name: "rose", text: "#fb7185", bg: "#88133733", border: "#f43f5e55", avatarBg: "#9f1239", avatarText: "#fecdd3" },
+  { name: "cyan", text: "#22d3ee", bg: "#164e6333", border: "#06b6d455", avatarBg: "#155e75", avatarText: "#cffafe" },
+  { name: "orange", text: "#fb923c", bg: "#7c2d1233", border: "#f9731655", avatarBg: "#9a3412", avatarText: "#ffedd5" },
+  { name: "teal", text: "#2dd4bf", bg: "#134e4a33", border: "#14b8a655", avatarBg: "#115e59", avatarText: "#ccfbf1" },
+  { name: "indigo", text: "#818cf8", bg: "#312e8133", border: "#6366f155", avatarBg: "#3730a3", avatarText: "#e0e7ff" },
+  { name: "lime", text: "#a3e635", bg: "#36531433", border: "#84cc1655", avatarBg: "#3f6212", avatarText: "#ecfccb" },
+];
+
+function getUserColor(key: string): UserColor {
+  if (!key) return USER_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash << 5) - hash + key.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % USER_COLORS.length;
+  return USER_COLORS[index];
+}
+
+function formatReplyBody(reply: MessageReply, userText: string): string {
+  const meta = JSON.stringify({
+    id: reply.id || "",
+    name: reply.name,
+    snippet: reply.snippet.slice(0, 150),
+  });
+  return `---reply\n${meta}\n---endreply\n${userText}`;
+}
+
+function parseMessageBody(rawBody: string): { reply: MessageReply | null; text: string } {
+  if (!rawBody) return { reply: null, text: "" };
+  const match = rawBody.match(/^---reply\n([\s\S]*?)\n---endreply\n([\s\S]*)$/);
+  if (match) {
+    try {
+      const meta = JSON.parse(match[1]);
+      if (meta && typeof meta === "object" && meta.name) {
+        return {
+          reply: {
+            id: typeof meta.id === "string" ? meta.id : undefined,
+            name: String(meta.name),
+            snippet: String(meta.snippet || ""),
+          },
+          text: match[2],
+        };
+      }
+    } catch {}
+  }
+  return { reply: null, text: rawBody };
+}
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -158,8 +227,13 @@ function App() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [hasUnread, setHasUnread] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; sender_name: string; sender_id: string; body: string } | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
+    return typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default";
+  });
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const composerInputRef = useRef<HTMLInputElement>(null);
   const initialMessagesLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -232,6 +306,33 @@ function App() {
               if (data.sender_id !== profile.id) {
                 setHasUnread(true);
                 playNotificationSound();
+
+                // Vibração suave no celular (dispositivo móvel)
+                if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+                  try {
+                    navigator.vibrate([200, 100, 200]);
+                  } catch {}
+                }
+
+                // Notificação discreta no navegador (sem expor remetente nem conteúdo)
+                if (
+                  typeof window !== "undefined" &&
+                  "Notification" in window &&
+                  Notification.permission === "granted" &&
+                  document.hidden
+                ) {
+                  try {
+                    const notif = new Notification("LSL — Chat", {
+                      body: "Você recebeu uma nova mensagem.",
+                      icon: "/favicon.ico",
+                      tag: "lsl-chat-unread",
+                    });
+                    notif.onclick = () => {
+                      window.focus();
+                      notif.close();
+                    };
+                  } catch {}
+                }
               }
             }
           });
@@ -266,14 +367,33 @@ function App() {
     }
     window.addEventListener("focus", clearUnread);
     window.addEventListener("click", clearUnread);
+    const handleVisibility = () => {
+      if (!document.hidden) clearUnread();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       window.removeEventListener("focus", clearUnread);
       window.removeEventListener("click", clearUnread);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 
   useEffect(() => {
-    document.title = hasUnread ? "(+) LSL — Chat" : "LSL — Chat";
+    let intervalId: number | null = null;
+    if (hasUnread) {
+      let toggle = false;
+      document.title = "🔔 (1) Nova mensagem!";
+      intervalId = window.setInterval(() => {
+        toggle = !toggle;
+        document.title = toggle ? "🔔 (1) Nova mensagem!" : "💬 LSL — Chat";
+      }, 1000);
+    } else {
+      document.title = "LSL — Chat";
+    }
+
+    return () => {
+      if (intervalId) window.clearInterval(intervalId);
+    };
   }, [hasUnread]);
 
   async function handleLogin(event: FormEvent) {
@@ -345,21 +465,60 @@ function App() {
     }
   }
 
+  function handleReplyTo(message: ChatMessage) {
+    const parsed = parseMessageBody(message.body);
+    const snippet = parsed.text ? parsed.text.slice(0, 120) : (message.image_id ? "📷 Imagem" : "");
+    setReplyingTo({
+      id: message.id,
+      sender_name: message.sender_name,
+      sender_id: message.sender_id,
+      body: snippet,
+    });
+    composerInputRef.current?.focus();
+  }
+
+  function scrollToMessage(messageId?: string) {
+    if (!messageId) return;
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("msg-highlight");
+      window.setTimeout(() => {
+        el.classList.remove("msg-highlight");
+      }, 2000);
+    }
+  }
+
+  async function handleRequestNotification() {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      const result = await Notification.requestPermission();
+      setNotificationPermission(result);
+      if (result === "granted") {
+        setNotice("Alertas discretos de nova mensagem ativados!");
+      }
+    } catch {}
+  }
+
   async function handleSend(event: FormEvent) {
     event.preventDefault();
-    const body = draft.trim();
-    if (!body || !profile || busy) return;
+    const text = draft.trim();
+    if (!text || !profile || busy) return;
+    const finalBody = replyingTo
+      ? formatReplyBody({ id: replyingTo.id, name: replyingTo.sender_name, snippet: replyingTo.body }, text)
+      : text;
     setBusy(true);
     setError("");
     try {
       await addDoc(collection(db, "messages"), {
         sender_id: profile.id,
         sender_name: profile.display_name || profile.username,
-        body,
+        body: finalBody,
         image_id: null,
         created_at: serverTimestamp(),
       });
       setDraft("");
+      setReplyingTo(null);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a mensagem.");
     } finally {
@@ -378,6 +537,11 @@ function App() {
       return;
     }
 
+    const text = draft.trim();
+    const finalBody = replyingTo
+      ? formatReplyBody({ id: replyingTo.id, name: replyingTo.sender_name, snippet: replyingTo.body }, text)
+      : text;
+
     setBusy(true);
     setError("");
     try {
@@ -385,11 +549,12 @@ function App() {
       const response = await fetch("/api/image", {
         method: "POST",
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData, body: draft.trim() }),
+        body: JSON.stringify({ imageData, body: finalBody }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Não foi possível enviar a imagem.");
       setDraft("");
+      setReplyingTo(null);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Não foi possível enviar a imagem.");
     } finally {
@@ -515,18 +680,24 @@ function App() {
   }
 
   async function handleEditMessage(message: ChatMessage) {
+    const parsed = parseMessageBody(message.body);
     setEditingMessageId(message.id);
-    setEditingBody(message.body);
+    setEditingBody(parsed.text);
   }
 
   async function handleSaveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editingMessageId || !editingBody.trim()) return;
+    const msg = messages.find((m) => m.id === editingMessageId);
+    const existingParsed = msg ? parseMessageBody(msg.body) : null;
+    const finalBody = existingParsed?.reply
+      ? formatReplyBody(existingParsed.reply, editingBody.trim())
+      : editingBody.trim();
     setBusy(true);
     setError("");
     try {
       await updateDoc(doc(db, "messages", editingMessageId), {
-        body: editingBody.trim(),
+        body: finalBody,
         edited_at: serverTimestamp(),
       });
       setEditingMessageId(null);
@@ -657,14 +828,29 @@ function App() {
         </button>
         <div className="sidebar-section-heading"><span>SEU TIME</span><span>{members.length}</span></div>
         <div className="member-list">
-          {members.map((member) => (
-            <div className="member-item" key={member.id}>
-              <span className={`avatar ${member.id === profile.id ? "avatar-self" : ""}`}>{initials(member.display_name || member.username)}</span>
-              <span className="member-name">{member.display_name || member.username}</span>
-              {member.role === "admin" && <ShieldCheck className="admin-shield" size={14} aria-label="Administrador" />}
-              <span className="presence-dot" />
-            </div>
-          ))}
+          {members.map((member) => {
+            const isMe = member.id === profile.id;
+            const mColor = isMe ? null : getUserColor(member.id || member.username);
+            return (
+              <div className="member-item" key={member.id}>
+                <span
+                  className={`avatar ${isMe ? "avatar-self" : ""}`}
+                  style={!isMe && mColor ? {
+                    backgroundColor: mColor.avatarBg,
+                    color: mColor.avatarText,
+                    borderColor: mColor.border,
+                  } : undefined}
+                >
+                  {initials(member.display_name || member.username)}
+                </span>
+                <span className="member-name" style={!isMe && mColor ? { color: mColor.text } : undefined}>
+                  {member.display_name || member.username}
+                </span>
+                {member.role === "admin" && <ShieldCheck className="admin-shield" size={14} aria-label="Administrador" />}
+                <span className="presence-dot" />
+              </div>
+            );
+          })}
         </div>
         <div className="sidebar-bottom">
           <div className="profile-card">
@@ -683,6 +869,17 @@ function App() {
           <span className="header-hash">#</span>
           <div className="channel-heading"><h1>geral</h1></div>
           <div className="header-actions">
+            {typeof window !== "undefined" && "Notification" in window && (
+              <button
+                type="button"
+                className={`icon-button notification-toggle-btn ${notificationPermission === "granted" ? "notif-granted" : ""}`}
+                onClick={handleRequestNotification}
+                title={notificationPermission === "granted" ? "Alertas discretos ativados no navegador" : "Ativar alerta discreto no navegador / celular"}
+                aria-label="Alertas do navegador"
+              >
+                {notificationPermission === "granted" ? <BellRing size={16} /> : <Bell size={16} />}
+              </button>
+            )}
             <div className="header-member-count"><Users size={16} /><span>{members.length}</span></div>
             {profile.role === "admin" && <button className="invite-button" onClick={() => {
               setShowAdminPanel(true);
@@ -704,16 +901,79 @@ function App() {
             const day = message.created_at.toDateString();
             const showDate = day !== previousDay;
             previousDay = day;
-            const canEdit = message.sender_id === profile.id && !message.image_id;
-            const canDelete = message.sender_id === profile.id || profile.role === "admin";
+            const isSelf = message.sender_id === profile.id;
+            const userColor = isSelf
+              ? { name: "self", text: "#c4bbfb", bg: "#7662ff20", border: "#8c7aff4d", avatarBg: "#5c52e8", avatarText: "#fff" }
+              : getUserColor(message.sender_id || message.sender_name);
+            const parsed = parseMessageBody(message.body);
+            const canEdit = isSelf && !message.image_id;
+            const canDelete = isSelf || profile.role === "admin";
             const isEditing = editingMessageId === message.id;
+
             return (
-              <div key={message.id}>
+              <div
+                key={message.id}
+                id={`msg-${message.id}`}
+                className={`message-wrapper ${isSelf ? "message-wrapper-self" : "message-wrapper-other"}`}
+              >
                 {showDate && <div className="date-divider"><span>{formatDay(message.created_at)}</span></div>}
-                <article className="message-row">
-                  <div className="avatar message-avatar">{initials(message.sender_name)}</div>
-                  <div className="message-content">
-                    <div className="message-meta"><strong>{message.sender_name}</strong><time>{displayTime(message.created_at)}</time>{message.edited_at && <span className="edited-label">(editado)</span>}</div>
+                <article className={`message-row ${isSelf ? "message-self" : "message-other"}`}>
+                  {!isSelf && (
+                    <div
+                      className="avatar message-avatar"
+                      style={{
+                        backgroundColor: userColor.avatarBg,
+                        color: userColor.avatarText,
+                        borderColor: userColor.border,
+                      }}
+                      title={message.sender_name}
+                    >
+                      {initials(message.sender_name)}
+                    </div>
+                  )}
+
+                  <div
+                    className={`message-card ${isSelf ? "message-card-self" : "message-card-other"}`}
+                    style={!isSelf ? {
+                      borderLeftColor: userColor.text,
+                      borderTopColor: userColor.border,
+                      borderRightColor: userColor.border,
+                      borderBottomColor: userColor.border,
+                      background: `linear-gradient(140deg, ${userColor.bg}, #121723f5)`,
+                    } : undefined}
+                  >
+                    <div className="message-meta">
+                      <strong style={{ color: userColor.text }}>
+                        {isSelf ? "Você" : message.sender_name}
+                      </strong>
+                      <time>{displayTime(message.created_at)}</time>
+                      {message.edited_at && <span className="edited-label">(editado)</span>}
+                    </div>
+
+                    {parsed.reply && (
+                      <div
+                        className="reply-quote"
+                        onClick={() => scrollToMessage(parsed.reply?.id)}
+                        title="Clique para ir até a mensagem citada"
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div
+                          className="reply-quote-bar"
+                          style={{ backgroundColor: getUserColor(parsed.reply.name).text }}
+                        />
+                        <div className="reply-quote-content">
+                          <span
+                            className="reply-quote-sender"
+                            style={{ color: getUserColor(parsed.reply.name).text }}
+                          >
+                            {parsed.reply.name}
+                          </span>
+                          <span className="reply-quote-text">{parsed.reply.snippet}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {isEditing ? (
                       <form className="edit-form" onSubmit={handleSaveEdit}>
                         <input
@@ -727,22 +987,69 @@ function App() {
                           <button className="edit-save-btn" type="submit" disabled={busy || !editingBody.trim()}>
                             <Check size={14} /> Salvar
                           </button>
-                          <button className="edit-cancel-btn" type="button" onClick={() => { setEditingMessageId(null); setEditingBody(""); }}>
+                          <button
+                            className="edit-cancel-btn"
+                            type="button"
+                            onClick={() => {
+                              setEditingMessageId(null);
+                              setEditingBody("");
+                            }}
+                          >
                             <X size={14} /> Cancelar
                           </button>
                         </div>
                       </form>
                     ) : (
                       <>
-                        {message.body && <p className="message-text">{message.body}</p>}
-                        {message.image_id && <ImageMessage imageId={message.image_id} user={user} isAdmin={profile.role === "admin"} onDownload={handleDownload} />}
+                        {parsed.text && <p className="message-text">{parsed.text}</p>}
+                        {message.image_id && (
+                          <ImageMessage
+                            imageId={message.image_id}
+                            user={user}
+                            isAdmin={profile.role === "admin"}
+                            onDownload={handleDownload}
+                          />
+                        )}
                       </>
                     )}
+
+                    {!isEditing && (
+                      <div className={`message-actions ${isSelf ? "message-actions-self" : "message-actions-other"}`}>
+                        <button
+                          type="button"
+                          className="msg-action-btn"
+                          title="Responder"
+                          onClick={() => handleReplyTo(message)}
+                        >
+                          <Reply size={13} />
+                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="msg-action-btn"
+                            title="Editar"
+                            onClick={() => handleEditMessage(message)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="msg-action-btn msg-delete-btn"
+                            title="Excluir"
+                            onClick={() => handleDeleteMessage(message.id)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {!isEditing && (canEdit || canDelete) && (
-                    <div className="message-actions">
-                      {canEdit && <button className="msg-action-btn" title="Editar" onClick={() => handleEditMessage(message)}><Pencil size={13} /></button>}
-                      {canDelete && <button className="msg-action-btn msg-delete-btn" title="Excluir" onClick={() => handleDeleteMessage(message.id)}><Trash2 size={13} /></button>}
+
+                  {isSelf && (
+                    <div className="avatar message-avatar avatar-self" title="Você">
+                      {initials(profile.display_name || profile.username)}
                     </div>
                   )}
                 </article>
@@ -755,10 +1062,46 @@ function App() {
         <div className="composer-wrap">
           {error && <div className="inline-alert error-alert"><AlertCircle size={16} />{error}<button onClick={() => setError("")} aria-label="Fechar"><X size={15} /></button></div>}
           {notice && <div className="inline-alert success-alert"><Check size={16} />{notice}<button onClick={() => setNotice("")} aria-label="Fechar"><X size={15} /></button></div>}
+
+          {replyingTo && (
+            <div className="composer-reply-banner">
+              <div
+                className="composer-reply-bar"
+                style={{ backgroundColor: getUserColor(replyingTo.sender_id || replyingTo.sender_name).text }}
+              />
+              <div className="composer-reply-info">
+                <span className="composer-reply-heading">
+                  <Reply size={13} /> Respondendo a{" "}
+                  <strong style={{ color: getUserColor(replyingTo.sender_id || replyingTo.sender_name).text }}>
+                    {replyingTo.sender_name}
+                  </strong>
+                </span>
+                <span className="composer-reply-preview">{replyingTo.body}</span>
+              </div>
+              <button
+                type="button"
+                className="composer-reply-close"
+                onClick={() => setReplyingTo(null)}
+                title="Cancelar resposta"
+                aria-label="Cancelar resposta"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
+
           <form className="composer" onSubmit={handleSend}>
             <input ref={fileRef} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} hidden onChange={(event) => handleImage(event.target.files?.[0])} />
             <button className="composer-tool" type="button" onClick={() => fileRef.current?.click()} disabled={busy} title="Enviar imagem" aria-label="Enviar imagem"><ImagePlus size={20} /></button>
-            <input className="composer-input" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Mensagem para #geral" maxLength={4000} aria-label="Escreva sua mensagem" />
+            <input
+              ref={composerInputRef}
+              className="composer-input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={replyingTo ? `Respondendo a @${replyingTo.sender_name}...` : "Mensagem para #geral"}
+              maxLength={4000}
+              aria-label="Escreva sua mensagem"
+            />
             <button className={`send-button ${draft.trim() ? "send-ready" : ""}`} type="submit" disabled={!draft.trim() || busy} title="Enviar mensagem" aria-label="Enviar mensagem"><Send size={18} /></button>
           </form>
           <div className="composer-hint">Compartilhe com cuidado — este é um espaço privado da equipe.</div>

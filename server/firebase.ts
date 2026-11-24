@@ -6,15 +6,39 @@ import type { ApiRequest, ApiResponse } from "./types.js";
 function cleanPrivateKey(key?: string): string | undefined {
   if (!key) return undefined;
   let cleaned = key.trim();
-  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+
+  // Caso a chave tenha sido salva codificada em Base64 para evitar problemas de quebra de linha
+  if (!cleaned.includes("-----BEGIN") && (cleaned.startsWith("LS0t") || !cleaned.includes(" "))) {
+    try {
+      const decoded = Buffer.from(cleaned, "base64").toString("utf-8");
+      if (decoded.includes("-----BEGIN")) {
+        cleaned = decoded.trim();
+      }
+    } catch {
+      // Ignora erro de decodificação se não for base64 válido
+    }
+  }
+
+  // Remove aspas externas simples ou duplas
+  while (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
     cleaned = cleaned.slice(1, -1).trim();
   }
-  return cleaned.replace(/\\n/g, "\n");
+
+  // Normaliza quebras de linha e remove retornos de carro (\r do Windows)
+  return cleaned
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
 }
 
 function firebaseAdminApp() {
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const projectId = (process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID)?.trim();
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
   const privateKey = cleanPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
   if (!projectId || !clientEmail || !privateKey) {
     const missing: string[] = [];
