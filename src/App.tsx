@@ -204,6 +204,44 @@ async function compressImage(file: File): Promise<string> {
   throw new Error("A imagem ficou grande demais mesmo após a compressão. Escolha uma imagem menor.");
 }
 
+async function sendDiscreetNotification() {
+  const title = "LSL — Chat";
+  const body = "Você recebeu uma nova mensagem.";
+
+  // 1. Tentar via Service Worker (Obrigatório no Android para exibir na barra de notificações)
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && "showNotification" in reg) {
+        await reg.showNotification(title, {
+          body,
+          icon: "/favicon.ico",
+          badge: "/favicon.ico",
+          tag: "lsl-chat-unread",
+          renotify: true,
+          vibrate: [200, 100, 200],
+        } as NotificationOptions);
+        return;
+      }
+    } catch {}
+  }
+
+  // 2. Fallback via new Notification para Desktop
+  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    try {
+      const notif = new Notification(title, {
+        body,
+        icon: "/favicon.ico",
+        tag: "lsl-chat-unread",
+      });
+      notif.onclick = () => {
+        window.focus();
+        notif.close();
+      };
+    } catch {}
+  }
+}
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -231,10 +269,17 @@ function App() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
     return typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default";
   });
+  const [dismissedNotifBanner, setDismissedNotifBanner] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
   const initialMessagesLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -314,24 +359,9 @@ function App() {
                   } catch {}
                 }
 
-                // Notificação discreta no navegador (sem expor remetente nem conteúdo)
-                if (
-                  typeof window !== "undefined" &&
-                  "Notification" in window &&
-                  Notification.permission === "granted" &&
-                  document.hidden
-                ) {
-                  try {
-                    const notif = new Notification("LSL — Chat", {
-                      body: "Você recebeu uma nova mensagem.",
-                      icon: "/favicon.ico",
-                      tag: "lsl-chat-unread",
-                    });
-                    notif.onclick = () => {
-                      window.focus();
-                      notif.close();
-                    };
-                  } catch {}
+                // Notificação discreta (barra do celular e desktop)
+                if (document.hidden) {
+                  void sendDiscreetNotification();
                 }
               }
             }
@@ -490,12 +520,37 @@ function App() {
   }
 
   async function handleRequestNotification() {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setError("Seu navegador não suporta notificações de sistema.");
+      return;
+    }
     try {
+      if ("serviceWorker" in navigator) {
+        await navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
       const result = await Notification.requestPermission();
       setNotificationPermission(result);
       if (result === "granted") {
-        setNotice("Alertas discretos de nova mensagem ativados!");
+        setNotice("Alertas no celular ativados!");
+        setDismissedNotifBanner(true);
+
+        // Dispara uma notificação de confirmação na barra do celular / desktop
+        if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            if (reg && "showNotification" in reg) {
+              await reg.showNotification("LSL — Chat", {
+                body: "Notificações ativadas! Alertas discretos chegarão na barra de notificações.",
+                icon: "/favicon.ico",
+                badge: "/favicon.ico",
+                tag: "lsl-chat-test",
+                vibrate: [200, 100, 200],
+              } as NotificationOptions);
+            }
+          } catch {}
+        }
+      } else if (result === "denied") {
+        setError("Notificações bloqueadas nas permissões do navegador do celular. Permita nas configurações para receber alertas.");
       }
     } catch {}
   }
@@ -891,6 +946,26 @@ function App() {
           </div>
         </header>
 
+        {notificationPermission !== "granted" && typeof window !== "undefined" && "Notification" in window && !dismissedNotifBanner && (
+          <div className="mobile-notif-banner">
+            <div className="mobile-notif-info">
+              <BellRing size={18} className="mobile-notif-bell" />
+              <div className="mobile-notif-text">
+                <strong>Ativar notificações no celular</strong>
+                <span>Receba avisos na barra do celular quando enviarem mensagens.</span>
+              </div>
+            </div>
+            <div className="mobile-notif-actions">
+              <button type="button" className="mobile-notif-btn" onClick={handleRequestNotification}>
+                Ativar
+              </button>
+              <button type="button" className="mobile-notif-close" onClick={() => setDismissedNotifBanner(true)} aria-label="Dispensar">
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="message-list" ref={listRef}>
           <div className="welcome-block">
             <div className="welcome-icon"><MessageCircle size={26} /></div>
@@ -1046,12 +1121,6 @@ function App() {
                       </div>
                     )}
                   </div>
-
-                  {isSelf && (
-                    <div className="avatar message-avatar avatar-self" title="Você">
-                      {initials(profile.display_name || profile.username)}
-                    </div>
-                  )}
                 </article>
               </div>
             );
